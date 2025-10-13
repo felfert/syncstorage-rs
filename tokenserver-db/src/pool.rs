@@ -12,6 +12,10 @@ use diesel_async::{
 };
 use diesel_logger::LoggingConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use crate::diesel::RunQueryDsl;
+use diesel::{
+    sql_types::{Integer, Text},
+};
 use syncserver_common::Metrics;
 #[cfg(debug_assertions)]
 use syncserver_db_common::test::test_transaction_hook;
@@ -40,6 +44,28 @@ fn run_embedded_migrations(database_url: &str) -> DbResult<()> {
 
     LoggingConnection::new(conn).run_pending_migrations(MIGRATIONS)?;
 
+    Ok(())
+}
+
+/// Update nodes from node_url and node_maxusers
+fn prepare_nodes(database_url: &str) -> DbResult<()> {
+    const UPDATE_NODE: &str = r"UPDATE nodes SET node = ? WHERE id = 1";
+    const UPDATE_MAXUSERS: &str = r"UPDATE nodes SET capacity = ? WHERE id = 1";
+    let mut conn = AsyncConnectionWrapper::<AsyncMysqlConnection>::establish(database_url)?;
+    let node_url = std::env::var("PUBLIC_URL").unwrap_or_else(|_| "".to_string());
+    let max_clients: i32 = std::env::var("MAX_CLIENTS").unwrap_or_else(|_| "0".to_string()).parse().unwrap_or(0);
+    if !node_url.is_empty() {
+        diesel::sql_query(UPDATE_NODE)
+            .bind::<Text, _>(&node_url)
+            .execute(&mut conn)
+            .unwrap_or(0);
+    }
+    if max_clients > 0 {
+        diesel::sql_query(UPDATE_MAXUSERS)
+            .bind::<Integer, _>(max_clients)
+            .execute(&mut conn)
+            .unwrap_or(0);
+    }
     Ok(())
 }
 
@@ -141,6 +167,8 @@ impl DbPool for TokenserverPool {
                 .await
                 .map_err(|e| DbError::internal(format!("Couldn't spawn migrations: {e}")))??;
         }
+        let dbu = self.database_url.clone();
+        let _ = spawn_blocking(move || prepare_nodes(&dbu)).await;
 
         // NOTE: Provided there's a "sync-1.5" service record in the database, it is highly
         // unlikely for this query to fail outside of network failures or other random errors
