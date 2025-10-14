@@ -134,7 +134,7 @@ impl MysqlDb {
             .select(user_collections::modified)
             .filter(user_collections::user_id.eq(user_id))
             .filter(user_collections::collection_id.eq(collection_id))
-            .for_share()
+            .for_update()
             .first(&mut self.conn)
             .await
             .optional()?;
