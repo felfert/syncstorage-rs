@@ -78,7 +78,7 @@ serde_json = { version = "1.0", features = ["arbitrary_precision"] }
 sha2 = "0.10"
 slog = { version = "2.5", features = [
   "max_level_trace",
-  "release_max_level_info",
+  "release_max_level_trace",
   "dynamic-keys",
 ] }
 slog-async = "2.5"
