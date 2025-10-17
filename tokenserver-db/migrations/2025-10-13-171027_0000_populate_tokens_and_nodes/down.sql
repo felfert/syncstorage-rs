@@ -1,0 +1,2 @@
+DELETE FROM services WHERE id=1;
+DELETE FROM nodes WHERE id=1;
